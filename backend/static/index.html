@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Photo Lab</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --fg: #1d1d1f;
+    --card: #ffffff;
+    --border: #e0e0e3;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  p.subtitle { color: #666; margin-top: 0; }
+  form {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  label { font-weight: 600; font-size: 0.9rem; }
+  input[type="text"], select {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: var(--card);
+    color: var(--fg);
+    font-family: inherit;
+  }
+  select { width: 100%; }
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .dropzone.drag { border-color: var(--accent); }
+  .dropzone img { max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 12px; }
+  input[type="file"] { display: none; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #a5a5aa; cursor: not-allowed; }
+  #status { font-size: 0.9rem; color: #555; min-height: 1.2em; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .grid figure {
+    margin: 0;
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .grid img { width: 100%; display: block; aspect-ratio: 1 / 1; object-fit: cover; }
+  .grid figcaption { padding: 8px; font-size: 0.8rem; text-align: center; }
+  .card-download-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .card-download-btn:hover { background: var(--accent); }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0 12px;
+  }
+  .toolbar .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg);
+  }
+  .btn-secondary:hover { background: var(--border); }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 3px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box {
+    background: #fdecea;
+    border: 1px solid #f5c2c0;
+    color: #8a1c1c;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+  }
+  .warn-box {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5b00;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f11;
+      --fg: #f0f0f2;
+      --card: #1a1a1d;
+      --border: #2c2c30;
+    }
+    p.subtitle { color: #999; }
+    #status { color: #aaa; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Product Photo Lab</h1>
+  <p class="subtitle">Upload one product photo, choose a niche, get 16 shots back (12 environment + 4 lifestyle hand shots).</p>
+
+  <form id="generate-form">
+    <div>
+      <label for="file-input">Product photo</label>
+      <div class="dropzone" id="dropzone">
+        <div id="dropzone-text">Click to choose a file, or drag & drop (JPG, PNG, WEBP)</div>
+        <img id="preview" style="display:none;" alt="preview">
+      </div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" required>
+    </div>
+
+    <div>
+      <label for="niche-select" dir="rtl">בחר נישה / קטגוריה</label>
+      <select id="niche-select" dir="rtl">
+        <option value="עיצוב הבית">עיצוב הבית</option>
+        <option value="תכשיטים ואקססוריז">תכשיטים ואקססוריז</option>
+        <option value="טיפוח וקוסמטיקה">טיפוח וקוסמטיקה</option>
+        <option value="מטבח ואירוח">מטבח ואירוח</option>
+        <option value="משרד וסביבת עבודה">משרד וסביבת עבודה</option>
+        <option value="חוץ וגינה">חוץ וגינה</option>
+        <option value="אופנה וביגוד">אופנה וביגוד</option>
+        <option value="אלקטרוניקה וגאדג'טים">אלקטרוניקה וגאדג'טים</option>
+        <option value="custom">מותאם אישית / הקלדה חופשית</option>
+      </select>
+      <input type="text" id="niche-input" dir="rtl" style="display:none; margin-top: 10px;"
+             placeholder="תארו את הנישה או הסביבה הרצויה">
+    </div>
+
+    <button type="submit" id="submit-btn">Generate photos</button>
+    <div id="status"></div>
+  </form>
+
+  <div id="error-container"></div>
+  <div id="warn-container"></div>
+
+  <div class="toolbar" id="toolbar" style="display:none;">
+    <span id="result-count"></span>
+    <div class="actions">
+      <button id="download-separate-btn" type="button">Download All 16 Images (Separate Files)</button>
+      <button id="download-all-btn" type="button" class="btn-secondary">Download All (.zip)</button>
+    </div>
+  </div>
+
+  <div class="grid" id="results"></div>
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const dropzoneText = document.getElementById('dropzone-text');
+const fileInput = document.getElementById('file-input');
+const preview = document.getElementById('preview');
+const form = document.getElementById('generate-form');
+const submitBtn = document.getElementById('submit-btn');
+const statusEl = document.getElementById('status');
+const errorContainer = document.getElementById('error-container');
+const warnContainer = document.getElementById('warn-container');
+const resultsEl = document.getElementById('results');
+const toolbar = document.getElementById('toolbar');
+const resultCount = document.getElementById('result-count');
+const downloadAllBtn = document.getElementById('download-all-btn');
+const downloadSeparateBtn = document.getElementById('download-separate-btn');
+const nicheSelect = document.getElementById('niche-select');
+const nicheInput = document.getElementById('niche-input');
+
+let currentImages = [];
+let selectedNiche = nicheSelect.value;
+
+nicheSelect.addEventListener('change', () => {
+  if (nicheSelect.value === 'custom') {
+    selectedNiche = '';
+    nicheInput.style.display = 'block';
+    nicheInput.value = '';
+    nicheInput.focus();
+  } else {
+    selectedNiche = nicheSelect.value;
+    nicheInput.style.display = 'none';
+    nicheInput.value = '';
+  }
+});
+
+nicheInput.addEventListener('input', () => {
+  selectedNiche = nicheInput.value.trim();
+});
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    handleFileSelected();
+  }
+});
+fileInput.addEventListener('change', handleFileSelected);
+
+function handleFileSelected() {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    dropzoneText.textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearMessages() {
+  errorContainer.innerHTML = '';
+  warnContainer.innerHTML = '';
+}
+
+function showError(msg) {
+  errorContainer.innerHTML = `<div class="error-box">${escapeHtml(msg)}</div>`;
+}
+
+function showWarnings(warnings) {
+  if (!warnings || !warnings.length) return;
+  warnContainer.innerHTML = `<div class="warn-box">${warnings.map(escapeHtml).join('<br>')}</div>`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function setStatus(text) {
+  statusEl.innerHTML = `<span class="spinner"></span>${text}`;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearMessages();
+  resultsEl.innerHTML = '';
+  toolbar.style.display = 'none';
+  currentImages = [];
+
+  const file = fileInput.files[0];
+  const niche = selectedNiche.trim();
+  if (!file) { showError('Please choose a product photo.'); return; }
+  if (!niche) { showError('Please choose a niche, or select Custom and describe one.'); return; }
+
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('niche', niche);
+
+  submitBtn.disabled = true;
+  setStatus('Uploading your photo…');
+
+  const allWarnings = [];
+
+  try {
+    const resp = await fetch('/api/generate', { method: 'POST', body: formData });
+
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => null);
+      const detail = data && data.detail ? data.detail : `Request failed with status ${resp.status}`;
+      throw new Error(detail);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let errorDetail = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+
+        const event = JSON.parse(line);
+
+        if (event.type === 'grid') {
+          appendResults(event.images);
+          setStatus(`Received ${event.completed}/${event.total} batches — ${currentImages.length} photos so far…`);
+        } else if (event.type === 'warning') {
+          allWarnings.push(event.message);
+          setStatus(`Received ${event.completed}/${event.total} batches — ${currentImages.length} photos so far…`);
+        } else if (event.type === 'error') {
+          errorDetail = event.detail;
+        }
+      }
+    }
+
+    if (errorDetail) {
+      throw new Error(errorDetail);
+    }
+    if (!currentImages.length) {
+      throw new Error('No images were returned.');
+    }
+
+    showWarnings(allWarnings);
+    resultCount.textContent = `${currentImages.length} images — "${niche}"`;
+    statusEl.textContent = `Done — ${currentImages.length} images generated.`;
+  } catch (err) {
+    statusEl.textContent = '';
+    showError(err.message || 'Something went wrong.');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+function appendResults(newImages) {
+  const startIndex = currentImages.length;
+  currentImages = currentImages.concat(newImages);
+
+  const html = newImages.map((src, j) => {
+    const i = startIndex + j;
+    return `
+    <figure>
+      <img src="${src}" alt="Generated product photo ${i + 1}">
+      <button type="button" class="card-download-btn" data-index="${i}" title="Download this photo" aria-label="Download photo ${i + 1}">⬇</button>
+      <figcaption>${i + 1}</figcaption>
+    </figure>
+  `;
+  }).join('');
+
+  resultsEl.insertAdjacentHTML('beforeend', html);
+  toolbar.style.display = 'flex';
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+resultsEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.card-download-btn');
+  if (!btn) return;
+  const i = Number(btn.dataset.index);
+  const src = currentImages[i];
+  if (!src) return;
+  downloadDataUrl(src, `product-photo-${String(i + 1).padStart(2, '0')}.jpg`);
+});
+
+downloadSeparateBtn.addEventListener('click', async () => {
+  if (!currentImages.length) return;
+  downloadSeparateBtn.disabled = true;
+  const originalText = downloadSeparateBtn.textContent;
+  try {
+    for (let i = 0; i < currentImages.length; i++) {
+      downloadSeparateBtn.textContent = `Downloading ${i + 1} / ${currentImages.length}…`;
+      downloadDataUrl(currentImages[i], `product-photo-${String(i + 1).padStart(2, '0')}.jpg`);
+      // Small delay so the browser doesn't block rapid-fire downloads.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  } finally {
+    downloadSeparateBtn.disabled = false;
+    downloadSeparateBtn.textContent = originalText;
+  }
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+  if (!currentImages.length) return;
+  downloadAllBtn.disabled = true;
+  downloadAllBtn.textContent = 'Zipping…';
+  try {
+    const zip = new JSZip();
+    currentImages.forEach((dataUrl, i) => {
+      const base64 = dataUrl.split(',')[1];
+      zip.file(`product-photo-${String(i + 1).padStart(2, '0')}.jpg`, base64, { base64: true });
+    });
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'product-photos.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    downloadAllBtn.disabled = false;
+    downloadAllBtn.textContent = 'Download All (.zip)';
+  }
+});
+</script>
+</body>
+</html>

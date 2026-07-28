@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: product-photo-lab
+    env: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-image
+      - key: GEMINI_IMAGE_SIZE
+        value: 2K
