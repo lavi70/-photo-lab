@@ -24,6 +24,14 @@ class GeminiImageResult:
     image_bytes: bytes
     mime_type: str
 
+SCALE_LOCK_DIRECTIVE = (
+    "CRITICAL REQUIREMENT - SCALE & PROPORTIONS LOCK: Do NOT alter, warp, stretch, shrink, or "
+    "misrepresent the physical scale, dimensions, or relative size of the product. The product must "
+    "retain its exact original height-to-width aspect ratio and realistic physical size relative to "
+    "surrounding lifestyle props and furniture. Only construct natural environment backgrounds, "
+    "shadows, and lighting around the strictly locked product shape."
+)
+
 def _build_prompt(niche: str) -> str:
     niche_clean = (niche or "general product").strip() or "general product"
     return f"""Create a single square image composed of exactly four product photos arranged in a perfect 2x2 grid.
@@ -39,6 +47,8 @@ STRICT LAYOUT REQUIREMENTS (highest priority):
 STRICT PRODUCT PRESERVATION (ZERO TOLERANCE FOR CHANGES):
 You MUST use the exact product shown in the input image. Do NOT alter the product's shape, geometry, outline, color, interior contents, or material. The product itself must remain 100% pixel-identical in form to the uploaded reference image. ONLY change the background environment, angles, and lighting.
 The reference image is the single source of truth for the product's structure, geometry, and silhouette in every one of the four quadrants — never deviate from it.
+
+{SCALE_LOCK_DIRECTIVE}
 
 PRODUCT ACCURACY RULES:
 - Preserve the exact original proportions, shape, and dimensions of the product as in the reference image.
@@ -61,42 +71,7 @@ STYLE REQUIREMENTS:
 - No text, no logos, no watermarks.
 
 FINAL CHECK (critical):
-Ensure there are ZERO visible lines or separations between the four sections. The image must appear as one seamless composition. Ensure the product's shape, geometry, and silhouette are unchanged and identical to the reference image in all four quadrants."""
-
-def _build_lifestyle_prompt(niche: str) -> str:
-    niche_clean = (niche or "general product").strip() or "general product"
-    return f"""Create a single square image composed of exactly four lifestyle product photos arranged in a perfect 2x2 grid.
-
-STRICT LAYOUT REQUIREMENTS (highest priority):
-- The four images must be merged seamlessly into one continuous canvas.
-- Absolutely no visible borders, lines, dividers, gaps, or spacing between the four sections.
-- No white lines or grid structure should be visible at all.
-- The transitions between the four quadrants must be completely invisible.
-- The final result must look like one unified image, not a collage.
-- The canvas must be fully filled edge-to-edge with zero margins and zero padding.
-
-STRICT PRODUCT PRESERVATION (ZERO TOLERANCE FOR CHANGES):
-You MUST use the exact product shown in the input image. Do NOT alter the product's shape, geometry, outline, color, interior contents, or material. The product itself must remain 100% pixel-identical in form to the uploaded reference image.
-The reference image is the single source of truth for the product's structure, geometry, and silhouette in every one of the four quadrants — never deviate from it.
-- DO NOT redesign the product.
-- DO NOT change the silhouette.
-- DO NOT generate a different object of the same category.
-
-LIFESTYLE / HUMAN PRESENTATION CONTENT (all four quadrants):
-Macro and medium close-up shots of a model's hands gracefully holding and presenting the product. Show different angles of placement in hand. Crucially: Do not show the model's face or upper body; focus only from the chest/shoulders down to the hands and the product. Ensure the model's skin tone and style are natural and non-distracting.
-
-ALLOWED VARIATIONS:
-- Each quadrant should present a different hand angle, grip, or placement.
-- You may change background, lighting, and camera angle only. (Make the setting relevant to the niche: {niche_clean}).
-
-STYLE REQUIREMENTS:
-- Clean, realistic, professional product photography style.
-- Natural lighting or soft studio lighting.
-- No text, no logos, no watermarks.
-- No visible face or upper body of the model in any quadrant.
-
-FINAL CHECK (critical):
-Ensure there are ZERO visible lines or separations between the four sections. The image must appear as one seamless composition. Ensure the product's shape, geometry, and silhouette are unchanged and identical to the reference image in all four quadrants. Ensure no model face or upper body is visible in any quadrant."""
+Ensure there are ZERO visible lines or separations between the four sections. The image must appear as one seamless composition. Ensure the product's shape, geometry, silhouette, and physical scale/proportions are unchanged and identical to the reference image in all four quadrants."""
 
 def _extract_image_block(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
     output_image = payload.get("output_image")
@@ -133,6 +108,9 @@ async def generate_grid_image(
         ],
         "response_format": {
             "type": "image",
+            # The grid itself is always requested square (it's a 2x2 layout of
+            # sub-photos); the *final* per-photo aspect ratio is applied later
+            # during cropping in image_processor.py, not here.
             "aspect_ratio": "1:1",
             "image_size": image_size,
         },
@@ -161,7 +139,7 @@ async def generate_grid_image(
                 continue
 
             if resp.status_code >= 400:
-                raise GeminiGenerationError(f"Gemini returned HTTP {resp.status_code}")
+                raise GeminiGenerationError(f"Gemini returned HTTP {resp.status_code}: {resp.text[:500]}")
 
             payload = resp.json()
             image_block = _extract_image_block(payload)
@@ -192,17 +170,17 @@ def build_grid_tasks(
     niche: str,
     api_key: str,
     client: httpx.AsyncClient,
-    count: int = 3,
+    grids_count: int,
     model: str = DEFAULT_MODEL,
     image_size: str = DEFAULT_IMAGE_SIZE,
-    include_lifestyle_grid: bool = True,
+    label_prefix: str = "grid",
 ) -> list[Any]:
-    """Build one labeled coroutine per grid so callers can consume results
-    as each one finishes (via asyncio.as_completed) instead of waiting for
-    every grid to complete before anything is usable."""
-    labeled_coros = [
+    """Build one labeled coroutine per grid (each grid yields 4 photos once
+    cropped) so callers can consume results as each one finishes (via
+    asyncio.as_completed) instead of waiting for all grids to complete."""
+    return [
         _labeled(
-            f"grid-{i + 1}",
+            f"{label_prefix}-grid-{i + 1}",
             generate_grid_image(
                 image_bytes=image_bytes,
                 mime_type=mime_type,
@@ -214,22 +192,5 @@ def build_grid_tasks(
                 prompt_builder=_build_prompt,
             ),
         )
-        for i in range(count)
+        for i in range(grids_count)
     ]
-    if include_lifestyle_grid:
-        labeled_coros.append(
-            _labeled(
-                "lifestyle",
-                generate_grid_image(
-                    image_bytes=image_bytes,
-                    mime_type=mime_type,
-                    niche=niche,
-                    api_key=api_key,
-                    model=model,
-                    image_size=image_size,
-                    client=client,
-                    prompt_builder=_build_lifestyle_prompt,
-                ),
-            )
-        )
-    return labeled_coros

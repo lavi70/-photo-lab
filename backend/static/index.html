@@ -14,6 +14,7 @@
     --border: #e0e0e3;
     --accent: #4f46e5;
     --accent-hover: #4338ca;
+    --danger: #dc2626;
   }
   * { box-sizing: border-box; }
   body {
@@ -22,6 +23,7 @@
     background: var(--bg);
     color: var(--fg);
     min-height: 100vh;
+    padding-bottom: 60px;
   }
   .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
   h1 { font-size: 1.6rem; margin-bottom: 4px; }
@@ -56,7 +58,9 @@
     transition: border-color .15s;
   }
   .dropzone.drag { border-color: var(--accent); }
+  .dropzone.small { padding: 14px; }
   .dropzone img { max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 12px; }
+  .dropzone.small img { max-height: 120px; }
   input[type="file"] { display: none; }
   button {
     background: var(--accent);
@@ -71,6 +75,19 @@
   button:hover { background: var(--accent-hover); }
   button:disabled { background: #a5a5aa; cursor: not-allowed; }
   #status { font-size: 0.9rem; color: #555; min-height: 1.2em; }
+  .pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    background: var(--card);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .pill:hover { border-color: var(--accent); }
+  .pill.selected { background: var(--accent); border-color: var(--accent); color: white; }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -147,6 +164,73 @@
     margin-bottom: 16px;
     font-size: 0.85rem;
   }
+  .history-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .history-toggle {
+    width: 100%;
+    background: transparent;
+    color: var(--fg);
+    border: none;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .history-body { padding: 0 20px 20px; display: none; }
+  .history-body.open { display: block; }
+  .history-entry {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .history-entry-meta { font-size: 0.85rem; }
+  .history-entry-actions { display: flex; gap: 8px; }
+  .history-preview { margin-top: 12px; }
+  .btn-danger { background: var(--danger); }
+  .btn-danger:hover { background: #b91c1c; }
+  #sticky-error-banner {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--danger);
+    color: white;
+    padding: 14px 20px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 0.85rem;
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+  }
+  #sticky-error-banner.visible { display: flex; }
+  #sticky-error-banner pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+  }
+  #sticky-error-close {
+    background: rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    flex-shrink: 0;
+  }
+  #sticky-error-close:hover { background: rgba(255,255,255,0.35); }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0f0f11;
@@ -162,11 +246,24 @@
 <body>
 <div class="wrap">
   <h1>Product Photo Lab</h1>
-  <p class="subtitle">Upload one product photo, choose a niche, get 16 shots back (12 environment + 4 lifestyle hand shots).</p>
+  <p class="subtitle">Upload a product photo, choose a niche and batch size, get environment shots back.</p>
+
+  <div class="history-section">
+    <button type="button" class="history-toggle" id="history-toggle">
+      <span>🕓 היסטוריית תמונות / Previous Generations</span>
+      <span id="history-toggle-icon">▾</span>
+    </button>
+    <div class="history-body" id="history-body">
+      <div id="history-empty" style="font-size:0.85rem; color:#888;">אין עדיין היסטוריה שמורה / No saved generations yet.</div>
+      <div id="history-list"></div>
+      <button type="button" id="history-clear-btn" class="btn-danger" style="margin-top:14px; display:none;">Clear History</button>
+      <div id="history-preview" class="history-preview"></div>
+    </div>
+  </div>
 
   <form id="generate-form">
     <div>
-      <label for="file-input">Product photo</label>
+      <label for="file-input">Primary product photo</label>
       <div class="dropzone" id="dropzone">
         <div id="dropzone-text">Click to choose a file, or drag & drop (JPG, PNG, WEBP)</div>
         <img id="preview" style="display:none;" alt="preview">
@@ -175,20 +272,46 @@
     </div>
 
     <div>
+      <label for="file-input-2">תמונת מוצר משנית (אופציונלי) / Secondary Product Variant (optional)</label>
+      <div class="dropzone small" id="dropzone2">
+        <div id="dropzone2-text">Click to choose a file, or drag & drop</div>
+        <img id="preview2" style="display:none;" alt="secondary preview">
+      </div>
+      <input type="file" id="file-input-2" accept="image/jpeg,image/png,image/webp">
+    </div>
+
+    <div>
       <label for="niche-select" dir="rtl">בחר נישה / קטגוריה</label>
       <select id="niche-select" dir="rtl">
-        <option value="עיצוב הבית">עיצוב הבית</option>
-        <option value="תכשיטים ואקססוריז">תכשיטים ואקססוריז</option>
-        <option value="טיפוח וקוסמטיקה">טיפוח וקוסמטיקה</option>
-        <option value="מטבח ואירוח">מטבח ואירוח</option>
-        <option value="משרד וסביבת עבודה">משרד וסביבת עבודה</option>
-        <option value="חוץ וגינה">חוץ וגינה</option>
-        <option value="אופנה וביגוד">אופנה וביגוד</option>
-        <option value="אלקטרוניקה וגאדג'טים">אלקטרוניקה וגאדג'טים</option>
-        <option value="custom">מותאם אישית / הקלדה חופשית</option>
+        <option value="עיצוב הבית">🏠 עיצוב הבית</option>
+        <option value="תכשיטים ואקססוריז">💎 תכשיטים ואקססוריז</option>
+        <option value="טיפוח וקוסמטיקה">💄 טיפוח וקוסמטיקה</option>
+        <option value="מטבח ואירוח">🍳 מטבח ואירוח</option>
+        <option value="משרד וסביבת עבודה">🖥️ משרד וסביבת עבודה</option>
+        <option value="חוץ וגינה">🌿 חוץ וגינה</option>
+        <option value="אופנה וביגוד">👗 אופנה וביגוד</option>
+        <option value="אלקטרוניקה וגאדג'טים">⚡ אלקטרוניקה וגאדג'טים</option>
+        <option value="custom">✏️ מותאם אישית</option>
       </select>
       <input type="text" id="niche-input" dir="rtl" style="display:none; margin-top: 10px;"
              placeholder="תארו את הנישה או הסביבה הרצויה">
+    </div>
+
+    <div>
+      <label>Batch size</label>
+      <div class="pill-group" id="quantity-group">
+        <button type="button" class="pill" data-quantity="4">4 photos</button>
+        <button type="button" class="pill" data-quantity="8">8 photos</button>
+        <button type="button" class="pill selected" data-quantity="12">12 photos</button>
+      </div>
+    </div>
+
+    <div>
+      <label>Aspect ratio</label>
+      <div class="pill-group" id="aspect-group">
+        <button type="button" class="pill selected" data-aspect="1:1">1:1 Square (Shopify/Etsy)</button>
+        <button type="button" class="pill" data-aspect="9:16">9:16 Vertical (Reels/TikTok/Ads)</button>
+      </div>
     </div>
 
     <button type="submit" id="submit-btn">Generate photos</button>
@@ -201,7 +324,7 @@
   <div class="toolbar" id="toolbar" style="display:none;">
     <span id="result-count"></span>
     <div class="actions">
-      <button id="download-separate-btn" type="button">Download All 16 Images (Separate Files)</button>
+      <button id="download-separate-btn" type="button">Download All (Separate Files)</button>
       <button id="download-all-btn" type="button" class="btn-secondary">Download All (.zip)</button>
     </div>
   </div>
@@ -209,11 +332,25 @@
   <div class="grid" id="results"></div>
 </div>
 
+<div id="sticky-error-banner">
+  <pre id="sticky-error-text"></pre>
+  <button type="button" id="sticky-error-close">Dismiss</button>
+</div>
+
 <script>
+const HISTORY_KEY = 'photoLabHistory';
+const MAX_HISTORY_ENTRIES = 6;
+
 const dropzone = document.getElementById('dropzone');
 const dropzoneText = document.getElementById('dropzone-text');
 const fileInput = document.getElementById('file-input');
 const preview = document.getElementById('preview');
+
+const dropzone2 = document.getElementById('dropzone2');
+const dropzone2Text = document.getElementById('dropzone2-text');
+const fileInput2 = document.getElementById('file-input-2');
+const preview2 = document.getElementById('preview2');
+
 const form = document.getElementById('generate-form');
 const submitBtn = document.getElementById('submit-btn');
 const statusEl = document.getElementById('status');
@@ -226,10 +363,28 @@ const downloadAllBtn = document.getElementById('download-all-btn');
 const downloadSeparateBtn = document.getElementById('download-separate-btn');
 const nicheSelect = document.getElementById('niche-select');
 const nicheInput = document.getElementById('niche-input');
+const quantityGroup = document.getElementById('quantity-group');
+const aspectGroup = document.getElementById('aspect-group');
+
+const historyToggle = document.getElementById('history-toggle');
+const historyToggleIcon = document.getElementById('history-toggle-icon');
+const historyBody = document.getElementById('history-body');
+const historyEmpty = document.getElementById('history-empty');
+const historyList = document.getElementById('history-list');
+const historyClearBtn = document.getElementById('history-clear-btn');
+const historyPreview = document.getElementById('history-preview');
+
+const stickyBanner = document.getElementById('sticky-error-banner');
+const stickyBannerText = document.getElementById('sticky-error-text');
+const stickyBannerClose = document.getElementById('sticky-error-close');
 
 let currentImages = [];
 let selectedNiche = nicheSelect.value;
+let selectedQuantity = 12;
+let selectedAspect = '1:1';
+let secondaryFile = null;
 
+// ---- Niche selector ----
 nicheSelect.addEventListener('change', () => {
   if (nicheSelect.value === 'custom') {
     selectedNiche = '';
@@ -242,11 +397,27 @@ nicheSelect.addEventListener('change', () => {
     nicheInput.value = '';
   }
 });
+nicheInput.addEventListener('input', () => { selectedNiche = nicheInput.value.trim(); });
 
-nicheInput.addEventListener('input', () => {
-  selectedNiche = nicheInput.value.trim();
+// ---- Quantity selector ----
+quantityGroup.addEventListener('click', (e) => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  [...quantityGroup.querySelectorAll('.pill')].forEach(p => p.classList.remove('selected'));
+  pill.classList.add('selected');
+  selectedQuantity = Number(pill.dataset.quantity);
 });
 
+// ---- Aspect ratio selector ----
+aspectGroup.addEventListener('click', (e) => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  [...aspectGroup.querySelectorAll('.pill')].forEach(p => p.classList.remove('selected'));
+  pill.classList.add('selected');
+  selectedAspect = pill.dataset.aspect;
+});
+
+// ---- Primary upload ----
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
@@ -255,19 +426,33 @@ dropzone.addEventListener('drop', (e) => {
   dropzone.classList.remove('drag');
   if (e.dataTransfer.files.length) {
     fileInput.files = e.dataTransfer.files;
-    handleFileSelected();
+    handleFileSelected(fileInput, preview, dropzoneText);
   }
 });
-fileInput.addEventListener('change', handleFileSelected);
+fileInput.addEventListener('change', () => handleFileSelected(fileInput, preview, dropzoneText));
 
-function handleFileSelected() {
-  const file = fileInput.files[0];
+// ---- Secondary upload ----
+dropzone2.addEventListener('click', () => fileInput2.click());
+dropzone2.addEventListener('dragover', (e) => { e.preventDefault(); dropzone2.classList.add('drag'); });
+dropzone2.addEventListener('dragleave', () => dropzone2.classList.remove('drag'));
+dropzone2.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone2.classList.remove('drag');
+  if (e.dataTransfer.files.length) {
+    fileInput2.files = e.dataTransfer.files;
+    handleFileSelected(fileInput2, preview2, dropzone2Text);
+  }
+});
+fileInput2.addEventListener('change', () => handleFileSelected(fileInput2, preview2, dropzone2Text));
+
+function handleFileSelected(input, previewEl, textEl) {
+  const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    preview.src = e.target.result;
-    preview.style.display = 'block';
-    dropzoneText.textContent = file.name;
+    previewEl.src = e.target.result;
+    previewEl.style.display = 'block';
+    textEl.textContent = file.name;
   };
   reader.readAsDataURL(file);
 }
@@ -296,24 +481,139 @@ function setStatus(text) {
   statusEl.innerHTML = `<span class="spinner"></span>${text}`;
 }
 
+// ---- Sticky error banner ----
+function showStickyError(detail) {
+  stickyBannerText.textContent = detail;
+  stickyBanner.classList.add('visible');
+}
+function hideStickyError() {
+  stickyBanner.classList.remove('visible');
+}
+stickyBannerClose.addEventListener('click', hideStickyError);
+
+// ---- Generation history (localStorage) ----
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveHistoryEntry(entry) {
+  let history = loadHistory();
+  history.unshift(entry);
+  history = history.slice(0, MAX_HISTORY_ENTRIES);
+
+  // localStorage has a hard quota (~5-10MB) and full-resolution base64
+  // images fill it fast, so if saving fails, keep trimming the oldest
+  // entries until it fits (or give up quietly rather than crash the app).
+  while (history.length > 0) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      renderHistory();
+      return;
+    } catch (e) {
+      history.pop();
+    }
+  }
+}
+
+function clearHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+  historyPreview.innerHTML = '';
+}
+historyClearBtn.addEventListener('click', clearHistory);
+
+function renderHistory() {
+  const history = loadHistory();
+  historyList.innerHTML = '';
+  if (!history.length) {
+    historyEmpty.style.display = 'block';
+    historyClearBtn.style.display = 'none';
+    return;
+  }
+  historyEmpty.style.display = 'none';
+  historyClearBtn.style.display = 'inline-block';
+
+  history.forEach((entry, idx) => {
+    const div = document.createElement('div');
+    div.className = 'history-entry';
+    const date = new Date(entry.timestamp);
+    div.innerHTML = `
+      <div class="history-entry-meta">
+        <strong>${escapeHtml(entry.niche)}</strong> — ${entry.images.length} photos<br>
+        <span style="color:#888;">${date.toLocaleString()}</span>
+      </div>
+      <div class="history-entry-actions">
+        <button type="button" class="btn-secondary history-open-btn" data-idx="${idx}">Preview</button>
+      </div>
+    `;
+    historyList.appendChild(div);
+  });
+}
+
+historyList.addEventListener('click', (e) => {
+  const btn = e.target.closest('.history-open-btn');
+  if (!btn) return;
+  const history = loadHistory();
+  const entry = history[Number(btn.dataset.idx)];
+  if (!entry) return;
+  renderHistoryPreview(entry);
+});
+
+function renderHistoryPreview(entry) {
+  const html = entry.images.map((src, i) => `
+    <figure>
+      <img src="${src}" alt="History photo ${i + 1}">
+      <button type="button" class="card-download-btn history-dl-btn" data-src="${encodeURI(src)}"
+        data-index="${i}" title="Download this photo">⬇</button>
+      <figcaption>${i + 1}</figcaption>
+    </figure>
+  `).join('');
+  historyPreview.innerHTML = `<div class="grid">${html}</div>`;
+}
+
+historyPreview.addEventListener('click', (e) => {
+  const btn = e.target.closest('.history-dl-btn');
+  if (!btn) return;
+  downloadDataUrl(decodeURI(btn.dataset.src), `history-photo-${String(Number(btn.dataset.index) + 1).padStart(2, '0')}.jpg`);
+});
+
+historyToggle.addEventListener('click', () => {
+  const open = historyBody.classList.toggle('open');
+  historyToggleIcon.textContent = open ? '▴' : '▾';
+});
+
+renderHistory();
+
+// ---- Generate ----
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   clearMessages();
+  hideStickyError();
   resultsEl.innerHTML = '';
   toolbar.style.display = 'none';
   currentImages = [];
 
   const file = fileInput.files[0];
   const niche = selectedNiche.trim();
-  if (!file) { showError('Please choose a product photo.'); return; }
+  if (!file) { showError('Please choose a primary product photo.'); return; }
   if (!niche) { showError('Please choose a niche, or select Custom and describe one.'); return; }
 
   const formData = new FormData();
   formData.append('image', file);
+  if (fileInput2.files[0]) {
+    formData.append('image2', fileInput2.files[0]);
+  }
   formData.append('niche', niche);
+  formData.append('quantity', String(selectedQuantity));
+  formData.append('aspect_ratio', selectedAspect);
 
   submitBtn.disabled = true;
-  setStatus('Uploading your photo…');
+  setStatus('Uploading your photo(s)…');
 
   const allWarnings = [];
 
@@ -323,7 +623,7 @@ form.addEventListener('submit', async (e) => {
     if (!resp.ok) {
       const data = await resp.json().catch(() => null);
       const detail = data && data.detail ? data.detail : `Request failed with status ${resp.status}`;
-      throw new Error(detail);
+      throw new Error(`HTTP ${resp.status}: ${detail}`);
     }
 
     const reader = resp.body.getReader();
@@ -365,10 +665,20 @@ form.addEventListener('submit', async (e) => {
 
     showWarnings(allWarnings);
     resultCount.textContent = `${currentImages.length} images — "${niche}"`;
+    downloadSeparateBtn.textContent = `Download All ${currentImages.length} Images (Separate Files)`;
     statusEl.textContent = `Done — ${currentImages.length} images generated.`;
+
+    saveHistoryEntry({
+      timestamp: Date.now(),
+      niche,
+      quantity: currentImages.length,
+      images: currentImages,
+    });
   } catch (err) {
     statusEl.textContent = '';
-    showError(err.message || 'Something went wrong.');
+    const message = err.message || 'Something went wrong.';
+    showError(message);
+    showStickyError(message);
   } finally {
     submitBtn.disabled = false;
   }
