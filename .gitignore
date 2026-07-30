@@ -7,3 +7,6 @@ backend/tunnel.log
 backend/cloudflared.exe
 backend/cloudflared.log
 push.log
+space_push.log
+streamlit_test.log
+.streamlit/secrets.toml
