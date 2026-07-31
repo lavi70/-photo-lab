@@ -4,7 +4,12 @@ from typing import List, Tuple
 from PIL import Image, ImageOps
 
 OUTPUT_FORMAT = "JPEG"
-OUTPUT_QUALITY = 100
+# 100 produces near-lossless but very heavy files (barely smaller than the
+# raw decoded bitmap). 85 is the standard "visually lossless to the eye"
+# sweet spot for JPEG — cuts file size dramatically with no perceptible
+# quality loss, which matters for anything that has to upload/download the
+# result quickly (e.g. sending to Telegram, mobile networks).
+OUTPUT_QUALITY = 85
 
 def split_grid_into_quadrants(grid_image_bytes: bytes) -> List[Image.Image]:
     with Image.open(BytesIO(grid_image_bytes)) as src:
